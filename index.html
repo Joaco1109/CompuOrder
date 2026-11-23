@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plan Ceibal - Sistema de Diagnóstico, Cajas y Préstamos (Datos Cargados)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        ceibal: {
+                            blue: '#005CA9',
+                            darkBlue: '#003B6F',
+                            green: '#00A859',
+                            red: '#E30613',
+                            orange: '#F37021',
+                            dark: '#1E293B'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        .key-cap { transition: all 0.15s ease; user-select: none; box-shadow: 0 3px 0 rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2); }
+        .key-cap:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,0.4); }
+        .key-cap.is-missing { background-color: #334155 !important; border-color: #475569 !important; box-shadow: inset 0 2px 5px rgba(0,0,0,0.8) !important; color: transparent !important; }
+        .key-cap.is-missing::after { content: ''; position: absolute; width: 14px; height: 14px; background: radial-gradient(circle, #94a3b8 35%, #475569 70%, #1e293b 100%); border-radius: 50%; border: 1px solid #64748b; }
+        .lid-sargas { background: radial-gradient(circle at 60% 40%, #1a1e29 0%, #090a0f 100%); border: 2px solid #2a324b; }
+        .lid-sirio { background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 50%, #94a3b8 100%); border: 2px solid #94a3b8; }
+        .lid-wezen { background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 70%, #e2e8f0 100%); border: 2px solid #cbd5e1; }
+        .glow-blue { filter: drop-shadow(0px 0px 4px rgba(56, 189, 248, 0.8)); }
+        .glow-orange { filter: drop-shadow(0px 0px 4px rgba(249, 115, 22, 0.9)); }
+        .glow-yellow { filter: drop-shadow(0px 0px 4px rgba(234, 179, 8, 0.9)); }
+    </style>
+</head>
+<body>
+<div id="app" class="min-h-screen flex flex-col justify-between">
+    <!-- Header -->
+    <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-tr from-blue-700 to-ceibal-blue text-white font-bold text-xl shadow-lg border border-blue-400/30">C</div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <h1 class="text-lg font-bold text-slate-100 leading-tight">Plan Ceibal</h1>
+                            <span id="firebase-status" class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800 font-mono">Datos JSON Cargados ✓</span>
+                        </div>
+                        <p class="text-[10px] text-slate-400">Inventario Pre-cargado &bull; Sincronizable con Firebase (startapp-9a-a5)</p>
+                    </div>
+                </div>
+
+                <div class="hidden lg:flex items-center space-x-4 text-xs">
+                    <div class="flex items-center space-x-2 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700">
+                        <span class="text-slate-400">Total:</span>
+                        <span id="metric-total" class="font-bold text-white font-mono">100</span>
+                    </div>
+                    <div class="flex items-center space-x-2 bg-emerald-950/40 px-3 py-1.5 rounded-lg border border-emerald-800/50">
+                        <span class="text-emerald-300">OK:</span>
+                        <span id="metric-operativas" class="font-bold text-emerald-400 font-mono">0</span>
+                    </div>
+                    <div class="flex items-center space-x-2 bg-amber-950/40 px-3 py-1.5 rounded-lg border border-amber-800/50">
+                        <span class="text-amber-300">Prestadas:</span>
+                        <span id="metric-prestadas" class="font-bold text-amber-400 font-mono">0</span>
+                    </div>
+                    <div class="flex items-center space-x-2 bg-rose-950/40 px-3 py-1.5 rounded-lg border border-rose-800/50">
+                        <span class="text-rose-300">Fallas:</span>
+                        <span id="metric-danadas" class="font-bold text-rose-400 font-mono">0</span>
+                    </div>
+                    <div class="flex items-center space-x-2 bg-purple-950/40 px-3 py-1.5 rounded-lg border border-purple-800/50">
+                        <span class="text-purple-300">Perdidas:</span>
+                        <span id="metric-perdidas" class="font-bold text-purple-400 font-mono">0</span>
+                    </div>
+                </div>
+
+                <!-- Botones y Auth Google -->
+                <div class="flex items-center space-x-2">
+                    <button id="btn-google-login" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white hover:bg-slate-100 text-slate-900 transition flex items-center space-x-1.5 shadow">
+                        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24">
+                            <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                            <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.14C3.26 21.3 7.31 24 12 24z"/>
+                            <path fill="#FBBC05" d="M5.28 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.99-3.14z"/>
+                            <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.99 3.14c.95-2.85 3.6-4.96 6.72-4.96z"/>
+                        </svg>
+                        <span>Iniciar con Google</span>
+                    </button>
+
+                    <div id="user-profile-box" class="hidden flex items-center space-x-2 bg-slate-800/90 px-2.5 py-1 rounded-lg border border-slate-700">
+                        <img id="user-avatar" src="" alt="Avatar" class="w-5 h-5 rounded-full border border-slate-500">
+                        <span id="user-name" class="text-xs font-medium text-slate-200 max-w-[110px] truncate">Usuario</span>
+                        <button id="btn-google-logout" class="text-[10px] text-rose-400 hover:text-rose-300 font-semibold ml-1" title="Cerrar sesión">Salir</button>
+                    </div>
+
+                    <button id="btn-sync-firebase" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition flex items-center space-x-1.5 shadow" title="Guardar datos actuales en Firebase Firestore">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                        <span>Guardar en Firebase</span>
+                    </button>
+                    <button id="btn-export-json" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+                        Exportar JSON
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full flex-grow">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <!-- Panel Izquierdo: Carpetas de Cajas -->
+            <section class="lg:col-span-4 bg-slate-900 rounded-xl border border-slate-800 flex flex-col h-[800px] shadow-xl overflow-hidden">
+                <div class="p-4 border-b border-slate-800 bg-slate-900/90 space-y-3">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-300">Carpetas / Cajas</h2>
+                        <div class="flex items-center space-x-2">
+                            <button id="btn-clear-selection" class="hidden text-[10px] text-blue-400 hover:text-blue-300 underline">Limpiar selección</button>
+                            <span id="inventory-count-badge" class="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-mono">100/100</span>
+                        </div>
+                    </div>
+                    <input type="text" id="search-input" placeholder="Buscar ID, Serial o Profesor..." class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500">
+                    <div class="grid grid-cols-5 gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-[11px]">
+                        <button data-filter-status="all" class="filter-status-btn active py-1 rounded text-center font-medium bg-blue-600 text-white">Todas</button>
+                        <button data-filter-status="operativa" class="filter-status-btn py-1 rounded text-center font-medium text-slate-400">OK</button>
+                        <button data-filter-status="prestada" class="filter-status-btn py-1 rounded text-center font-medium text-amber-400">Prestadas</button>
+                        <button data-filter-status="danada" class="filter-status-btn py-1 rounded text-center font-medium text-rose-400">Fallas</button>
+                        <button data-filter-status="perdida" class="filter-status-btn py-1 rounded text-center font-medium text-purple-400">Perdidas</button>
+                    </div>
+                </div>
+                <div id="folders-container" class="flex-1 overflow-y-auto p-3 space-y-2"></div>
+            </section>
+
+            <!-- Panel Derecho: Ficha Técnica + Préstamos + Teclado -->
+            <section class="lg:col-span-8 flex flex-col space-y-6">
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-4 mb-4 gap-4">
+                        <div>
+                            <div class="flex items-center space-x-3">
+                                <span id="detail-id" class="text-2xl font-bold font-mono text-blue-400">#001</span>
+                                <h2 id="detail-model-name" class="text-xl font-bold text-white">Ceibalita</h2>
+                                <span id="detail-model-badge" class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700">---</span>
+                            </div>
+                            <p id="detail-serial" class="text-xs font-mono text-slate-400 mt-1">S/N: ---</p>
+                        </div>
+                        <div class="px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 flex items-center space-x-3">
+                            <span id="status-dot" class="w-3 h-3 rounded-full bg-slate-500"></span>
+                            <div>
+                                <div id="status-text" class="text-xs uppercase font-bold tracking-wider text-slate-300">ESTADO</div>
+                                <div id="status-subtext" class="text-[11px] text-slate-400">---</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Vista Tapa + Teclas Faltantes -->
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center mb-4 pb-4 border-b border-slate-800">
+                        <div class="md:col-span-5 flex flex-col items-center justify-center p-3 bg-slate-950/60 rounded-lg border border-slate-800">
+                            <div id="laptop-lid-preview" class="w-52 h-36 rounded-xl relative flex flex-col justify-between p-3 shadow-2xl overflow-hidden lid-sargas">
+                                <div id="lid-svg-container" class="absolute inset-0 pointer-events-none"></div>
+                                <div class="relative z-10 flex justify-between items-center">
+                                    <span class="bg-slate-900/70 px-2 py-0.5 rounded text-[10px] text-blue-400 font-bold">ceibal</span>
+                                    <span id="lid-model-code" class="text-[9px] font-mono text-slate-300 bg-black/50 px-1.5 py-0.5 rounded">MODEL</span>
+                                </div>
+                                <div class="relative z-10 text-right">
+                                    <div id="lid-text-primary" class="text-[10px] font-bold text-slate-200">CEIBALITA</div>
+                                    <div id="lid-text-secondary" class="text-[8px] text-slate-400 font-mono">Plan Ceibal</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="md:col-span-7 space-y-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-xs font-bold text-slate-400 uppercase">Teclas Faltantes</span>
+                                <span id="missing-count-badge" class="text-xs font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">0 Faltantes</span>
+                            </div>
+                            <div id="missing-keys-container" class="min-h-[64px] max-h-[84px] overflow-y-auto bg-slate-950 p-2.5 rounded-lg border border-slate-800 flex flex-wrap gap-1.5 items-start"></div>
+                            <div class="flex space-x-2 pt-1">
+                                <button id="btn-fix-all" class="flex-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-900/50 hover:bg-emerald-800 text-emerald-300 border border-emerald-700">Reparar Teclado (OK)</button>
+                                <button id="btn-toggle-lost" class="flex-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-purple-900/50 hover:bg-purple-800 text-purple-300 border border-purple-700">Marcar Perdida / Encontrada</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Caja -->
+                        <div class="bg-slate-950/60 p-4 rounded-lg border border-slate-800 space-y-2.5">
+                            <div class="flex justify-between items-center">
+                                <h3 class="text-xs font-bold uppercase tracking-wider text-blue-400">Caja / Carpeta</h3>
+                                <span id="selected-bulk-badge" class="hidden text-[10px] font-mono bg-blue-950 text-blue-300 border border-blue-700 px-2 py-0.5 rounded">0 marcadas</span>
+                            </div>
+                            <div class="flex space-x-2">
+                                <select id="box-assignment-select" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200"></select>
+                                <button id="btn-assign-box" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-medium">Mover</button>
+                            </div>
+                            <div class="flex space-x-2">
+                                <input type="text" id="bulk-ids-input" placeholder="Lote por ID o rango (ej: 1-25 o 1,5,8)" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-200 font-mono">
+                                <button id="btn-assign-bulk" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium whitespace-nowrap" title="Mover las compus marcadas o el rango indicado">Mover Lote</button>
+                            </div>
+                            <div class="flex space-x-2">
+                                <input type="text" id="new-box-name" placeholder="Nueva caja (ej: Caja A-1)" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-200">
+                                <button id="btn-create-box" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs">+ Crear</button>
+                            </div>
+                        </div>
+
+                        <!-- Préstamo -->
+                        <div class="bg-slate-950/60 p-4 rounded-lg border border-slate-800 space-y-2.5">
+                            <h3 class="text-xs font-bold uppercase tracking-wider text-amber-400">Préstamo por Horario</h3>
+                            <div>
+                                <input type="text" id="teacher-name-input" placeholder="Nombre del Profesor" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200">
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="block text-[10px] text-slate-400 mb-0.5">Desde (hora)</label>
+                                    <input type="time" id="loan-start-input" value="11:00" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-200 font-mono">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] text-slate-400 mb-0.5">Hasta (hora)</label>
+                                    <input type="time" id="loan-end-input" value="14:00" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-200 font-mono">
+                                </div>
+                            </div>
+                            <div class="flex space-x-2">
+                                <select id="loan-scope-select" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-200">
+                                    <option value="single">Solo este equipo</option>
+                                    <option value="box">Toda la caja actual</option>
+                                </select>
+                                <button id="btn-save-loan" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold">Prestar</button>
+                                <button id="btn-return-loan" class="px-3 py-1.5 bg-emerald-800 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold hidden">Devolver</button>
+                            </div>
+                            <div id="loan-active-info" class="text-[11px] text-amber-300 hidden"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Teclado -->
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3">Diagnóstico de Teclado (Clic en tecla para marcar falla)</h3>
+                    <div class="w-full bg-slate-950 p-4 rounded-xl border border-slate-800 overflow-x-auto">
+                        <div id="keyboard-grid" class="min-w-[640px] max-w-[850px] mx-auto flex flex-col gap-1.5"></div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="bg-slate-900 border-t border-slate-800 py-3 text-center text-xs text-slate-500">
+        <p>Plan Ceibal Uruguay &bull; Inventario HTML con Datos Pre-cargados y Soporte Firebase &bull; 2026</p>
+    </footer>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+
+    const INITIAL_INVENTORY = [{"id": 1, "idPadded": "#001", "model": "SARGAS", "serial": "CEIBAL-SARGAS-001", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 2, "idPadded": "#002", "model": "SIRIO", "serial": "CEIBAL-SIRIO-002", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 3, "idPadded": "#003", "model": "WEZEN", "serial": "CEIBAL-WEZEN-003", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 4, "idPadded": "#004", "model": "SARGAS", "serial": "CEIBAL-SARGAS-004", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 5, "idPadded": "#005", "model": "SIRIO", "serial": "CEIBAL-SIRIO-005", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 6, "idPadded": "#006", "model": "WEZEN", "serial": "CEIBAL-WEZEN-006", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 7, "idPadded": "#007", "model": "SARGAS", "serial": "CEIBAL-SARGAS-007", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 8, "idPadded": "#008", "model": "SIRIO", "serial": "CEIBAL-SIRIO-008", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 9, "idPadded": "#009", "model": "WEZEN", "serial": "CEIBAL-WEZEN-009", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 10, "idPadded": "#010", "model": "SARGAS", "serial": "CEIBAL-SARGAS-010", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 11, "idPadded": "#011", "model": "SIRIO", "serial": "CEIBAL-SIRIO-011", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 12, "idPadded": "#012", "model": "WEZEN", "serial": "CEIBAL-WEZEN-012", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 13, "idPadded": "#013", "model": "SARGAS", "serial": "CEIBAL-SARGAS-013", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 14, "idPadded": "#014", "model": "SIRIO", "serial": "CEIBAL-SIRIO-014", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 15, "idPadded": "#015", "model": "WEZEN", "serial": "CEIBAL-WEZEN-015", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 16, "idPadded": "#016", "model": "SARGAS", "serial": "CEIBAL-SARGAS-016", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 17, "idPadded": "#017", "model": "SIRIO", "serial": "CEIBAL-SIRIO-017", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 18, "idPadded": "#018", "model": "WEZEN", "serial": "CEIBAL-WEZEN-018", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 19, "idPadded": "#019", "model": "SARGAS", "serial": "CEIBAL-SARGAS-019", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 20, "idPadded": "#020", "model": "SIRIO", "serial": "CEIBAL-SIRIO-020", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 21, "idPadded": "#021", "model": "WEZEN", "serial": "CEIBAL-WEZEN-021", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 22, "idPadded": "#022", "model": "SARGAS", "serial": "CEIBAL-SARGAS-022", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 23, "idPadded": "#023", "model": "SIRIO", "serial": "CEIBAL-SIRIO-023", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 24, "idPadded": "#024", "model": "WEZEN", "serial": "CEIBAL-WEZEN-024", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 25, "idPadded": "#025", "model": "SARGAS", "serial": "CEIBAL-SARGAS-025", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 26, "idPadded": "#026", "model": "SIRIO", "serial": "CEIBAL-SIRIO-026", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 27, "idPadded": "#027", "model": "WEZEN", "serial": "CEIBAL-WEZEN-027", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 28, "idPadded": "#028", "model": "SARGAS", "serial": "CEIBAL-SARGAS-028", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 29, "idPadded": "#029", "model": "SIRIO", "serial": "CEIBAL-SIRIO-029", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 30, "idPadded": "#030", "model": "WEZEN", "serial": "CEIBAL-WEZEN-030", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 31, "idPadded": "#031", "model": "SARGAS", "serial": "CEIBAL-SARGAS-031", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 32, "idPadded": "#032", "model": "SIRIO", "serial": "CEIBAL-SIRIO-032", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 33, "idPadded": "#033", "model": "WEZEN", "serial": "CEIBAL-WEZEN-033", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 34, "idPadded": "#034", "model": "SARGAS", "serial": "CEIBAL-SARGAS-034", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 35, "idPadded": "#035", "model": "SIRIO", "serial": "CEIBAL-SIRIO-035", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 36, "idPadded": "#036", "model": "WEZEN", "serial": "CEIBAL-WEZEN-036", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 37, "idPadded": "#037", "model": "SARGAS", "serial": "CEIBAL-SARGAS-037", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 38, "idPadded": "#038", "model": "SIRIO", "serial": "CEIBAL-SIRIO-038", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 39, "idPadded": "#039", "model": "WEZEN", "serial": "CEIBAL-WEZEN-039", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 40, "idPadded": "#040", "model": "SARGAS", "serial": "CEIBAL-SARGAS-040", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 41, "idPadded": "#041", "model": "SIRIO", "serial": "CEIBAL-SIRIO-041", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 42, "idPadded": "#042", "model": "WEZEN", "serial": "CEIBAL-WEZEN-042", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 43, "idPadded": "#043", "model": "SARGAS", "serial": "CEIBAL-SARGAS-043", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 44, "idPadded": "#044", "model": "SIRIO", "serial": "CEIBAL-SIRIO-044", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 45, "idPadded": "#045", "model": "WEZEN", "serial": "CEIBAL-WEZEN-045", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 46, "idPadded": "#046", "model": "SARGAS", "serial": "CEIBAL-SARGAS-046", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 47, "idPadded": "#047", "model": "SIRIO", "serial": "CEIBAL-SIRIO-047", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 48, "idPadded": "#048", "model": "WEZEN", "serial": "CEIBAL-WEZEN-048", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 49, "idPadded": "#049", "model": "SARGAS", "serial": "CEIBAL-SARGAS-049", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 50, "idPadded": "#050", "model": "SIRIO", "serial": "CEIBAL-SIRIO-050", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 51, "idPadded": "#051", "model": "WEZEN", "serial": "CEIBAL-WEZEN-051", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 52, "idPadded": "#052", "model": "SARGAS", "serial": "CEIBAL-SARGAS-052", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 53, "idPadded": "#053", "model": "SIRIO", "serial": "CEIBAL-SIRIO-053", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 54, "idPadded": "#054", "model": "WEZEN", "serial": "CEIBAL-WEZEN-054", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 55, "idPadded": "#055", "model": "SARGAS", "serial": "CEIBAL-SARGAS-055", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 56, "idPadded": "#056", "model": "SIRIO", "serial": "CEIBAL-SIRIO-056", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 57, "idPadded": "#057", "model": "WEZEN", "serial": "CEIBAL-WEZEN-057", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 58, "idPadded": "#058", "model": "SARGAS", "serial": "CEIBAL-SARGAS-058", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 59, "idPadded": "#059", "model": "SIRIO", "serial": "CEIBAL-SIRIO-059", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 60, "idPadded": "#060", "model": "WEZEN", "serial": "CEIBAL-WEZEN-060", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 61, "idPadded": "#061", "model": "SARGAS", "serial": "CEIBAL-SARGAS-061", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 62, "idPadded": "#062", "model": "SIRIO", "serial": "CEIBAL-SIRIO-062", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 63, "idPadded": "#063", "model": "WEZEN", "serial": "CEIBAL-WEZEN-063", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 64, "idPadded": "#064", "model": "SARGAS", "serial": "CEIBAL-SARGAS-064", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 65, "idPadded": "#065", "model": "SIRIO", "serial": "CEIBAL-SIRIO-065", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 66, "idPadded": "#066", "model": "WEZEN", "serial": "CEIBAL-WEZEN-066", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 67, "idPadded": "#067", "model": "SARGAS", "serial": "CEIBAL-SARGAS-067", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 68, "idPadded": "#068", "model": "SIRIO", "serial": "CEIBAL-SIRIO-068", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 69, "idPadded": "#069", "model": "WEZEN", "serial": "CEIBAL-WEZEN-069", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 70, "idPadded": "#070", "model": "SARGAS", "serial": "CEIBAL-SARGAS-070", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 71, "idPadded": "#071", "model": "SIRIO", "serial": "CEIBAL-SIRIO-071", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 72, "idPadded": "#072", "model": "WEZEN", "serial": "CEIBAL-WEZEN-072", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 73, "idPadded": "#073", "model": "SARGAS", "serial": "CEIBAL-SARGAS-073", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 74, "idPadded": "#074", "model": "SIRIO", "serial": "CEIBAL-SIRIO-074", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 75, "idPadded": "#075", "model": "WEZEN", "serial": "CEIBAL-WEZEN-075", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 76, "idPadded": "#076", "model": "SARGAS", "serial": "CEIBAL-SARGAS-076", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 77, "idPadded": "#077", "model": "SIRIO", "serial": "CEIBAL-SIRIO-077", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 78, "idPadded": "#078", "model": "WEZEN", "serial": "CEIBAL-WEZEN-078", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 79, "idPadded": "#079", "model": "SARGAS", "serial": "CEIBAL-SARGAS-079", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 80, "idPadded": "#080", "model": "SIRIO", "serial": "CEIBAL-SIRIO-080", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 81, "idPadded": "#081", "model": "WEZEN", "serial": "CEIBAL-WEZEN-081", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 82, "idPadded": "#082", "model": "SARGAS", "serial": "CEIBAL-SARGAS-082", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 83, "idPadded": "#083", "model": "SIRIO", "serial": "CEIBAL-SIRIO-083", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 84, "idPadded": "#084", "model": "WEZEN", "serial": "CEIBAL-WEZEN-084", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 85, "idPadded": "#085", "model": "SARGAS", "serial": "CEIBAL-SARGAS-085", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 86, "idPadded": "#086", "model": "SIRIO", "serial": "CEIBAL-SIRIO-086", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 87, "idPadded": "#087", "model": "WEZEN", "serial": "CEIBAL-WEZEN-087", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 88, "idPadded": "#088", "model": "SARGAS", "serial": "CEIBAL-SARGAS-088", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 89, "idPadded": "#089", "model": "SIRIO", "serial": "CEIBAL-SIRIO-089", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 90, "idPadded": "#090", "model": "WEZEN", "serial": "CEIBAL-WEZEN-090", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 91, "idPadded": "#091", "model": "SARGAS", "serial": "CEIBAL-SARGAS-091", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 92, "idPadded": "#092", "model": "SIRIO", "serial": "CEIBAL-SIRIO-092", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 93, "idPadded": "#093", "model": "WEZEN", "serial": "CEIBAL-WEZEN-093", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 94, "idPadded": "#094", "model": "SARGAS", "serial": "CEIBAL-SARGAS-094", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 95, "idPadded": "#095", "model": "SIRIO", "serial": "CEIBAL-SIRIO-095", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 96, "idPadded": "#096", "model": "WEZEN", "serial": "CEIBAL-WEZEN-096", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 97, "idPadded": "#097", "model": "SARGAS", "serial": "CEIBAL-SARGAS-097", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 98, "idPadded": "#098", "model": "SIRIO", "serial": "CEIBAL-SIRIO-098", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 99, "idPadded": "#099", "model": "WEZEN", "serial": "CEIBAL-WEZEN-099", "missingKeys": [], "isLost": false, "box": null, "loan": null}, {"id": 100, "idPadded": "#100", "model": "SARGAS", "serial": "CEIBAL-SARGAS-100", "missingKeys": [], "isLost": false, "box": null, "loan": null}];
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyAoZvLaT-6H34OWNZD6Q5lDM4PUuFkvF0Q",
+        authDomain: "startapp-9a-a5.firebaseapp.com",
+        projectId: "startapp-9a-a5",
+        storageBucket: "startapp-9a-a5.firebasestorage.app",
+        messagingSenderId: "208415386615",
+        appId: "1:208415386615:web:f1abd710eb842bd782dcf2"
+    };
+
+    let db = null;
+    let docRef = null;
+    let auth = null;
+    let currentUser = null;
+    const googleProvider = new GoogleAuthProvider();
+
+    try {
+        const app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        auth = getAuth(app);
+        docRef = doc(db, "inventario_ceibal", "datos_principales");
+
+        onAuthStateChanged(auth, (user) => {
+            currentUser = user;
+            const loginBtn = document.getElementById('btn-google-login');
+            const profileBox = document.getElementById('user-profile-box');
+            const statusBadge = document.getElementById('firebase-status');
+
+            if (user) {
+                loginBtn.classList.add('hidden');
+                profileBox.classList.remove('hidden');
+                document.getElementById('user-name').innerText = user.displayName || user.email;
+                document.getElementById('user-avatar').src = user.photoURL || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.displayName || 'U');
+                statusBadge.innerText = "Conectado con Google ✓";
+                statusBadge.className = "text-[10px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800 font-mono";
+            } else {
+                loginBtn.classList.remove('hidden');
+                profileBox.classList.add('hidden');
+                statusBadge.innerText = "Modo Local (Sin sesión)";
+                statusBadge.className = "text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-mono";
+            }
+        });
+    } catch (e) {
+        console.warn("Modo offline / local activo:", e);
+    }
+
+    document.getElementById('btn-google-login').onclick = async () => {
+        if (!auth) return alert("Firebase Auth no está inicializado.");
+        try {
+            await signInWithPopup(auth, googleProvider);
+        } catch (error) {
+            console.error("Error al iniciar sesión con Google:", error);
+            if (error.code === 'auth/unauthorized-domain') {
+                alert("Dominio no autorizado en Firebase Console. Si abriste el archivo local (file://), súbelo a un servidor (ej. localhost, GitHub Pages o Firebase Hosting) o habilita el dominio en Authentication > Settings > Authorized domains.");
+            } else {
+                alert("No se pudo iniciar sesión con Google: " + error.message);
+            }
+        }
+    };
+
+    document.getElementById('btn-google-logout').onclick = async () => {
+        if (!auth) return;
+        try {
+            await signOut(auth);
+        } catch (error) {
+            console.error("Error al cerrar sesión:", error);
+        }
+    };
+
+    let inventory = JSON.parse(JSON.stringify(INITIAL_INVENTORY));
+    let boxesList = Array.from(new Set(inventory.map(i => i.box).filter(Boolean)));
+    let openFolders = new Set([...boxesList, 'Sin Caja']);
+    let selectedEquipmentId = 1;
+    let bulkSelectedIds = new Set();
+    let currentStatusFilter = 'all';
+    let currentSearchTerm = '';
+
+    const KEYBOARD_LAYOUT = [
+        [{ code: 'Escape', label: 'Esc', width: 'w-10' }, { code: 'F1', label: 'F1' }, { code: 'F2', label: 'F2' }, { code: 'F3', label: 'F3' }, { code: 'F4', label: 'F4' }, { code: 'F5', label: 'F5' }, { code: 'F6', label: 'F6' }, { code: 'F7', label: 'F7' }, { code: 'F8', label: 'F8' }, { code: 'F9', label: 'F9' }, { code: 'F10', label: 'F10' }, { code: 'F11', label: 'F11' }, { code: 'F12', label: 'F12' }, { code: 'Delete', label: 'Supr', width: 'w-10' }],
+        [{ code: 'Backquote', label: '|°' }, { code: 'Digit1', label: '1' }, { code: 'Digit2', label: '2' }, { code: 'Digit3', label: '3' }, { code: 'Digit4', label: '4' }, { code: 'Digit5', label: '5' }, { code: 'Digit6', label: '6' }, { code: 'Digit7', label: '7' }, { code: 'Digit8', label: '8' }, { code: 'Digit9', label: '9' }, { code: 'Digit0', label: '0' }, { code: 'Minus', label: "'" }, { code: 'Equal', label: '¿' }, { code: 'Backspace', label: 'Backspace', width: 'flex-1' }],
+        [{ code: 'Tab', label: 'Tab', width: 'w-14' }, { code: 'KeyQ', label: 'Q' }, { code: 'KeyW', label: 'W' }, { code: 'KeyE', label: 'E' }, { code: 'KeyR', label: 'R' }, { code: 'KeyT', label: 'T' }, { code: 'KeyY', label: 'Y' }, { code: 'KeyU', label: 'U' }, { code: 'KeyI', label: 'I' }, { code: 'KeyO', label: 'O' }, { code: 'KeyP', label: 'P' }, { code: 'BracketLeft', label: '`' }, { code: 'BracketRight', label: '+' }, { code: 'Enter', label: 'Enter', width: 'flex-1' }],
+        [{ code: 'CapsLock', label: 'Bloq', width: 'w-16' }, { code: 'KeyA', label: 'A' }, { code: 'KeyS', label: 'S' }, { code: 'KeyD', label: 'D' }, { code: 'KeyF', label: 'F' }, { code: 'KeyG', label: 'G' }, { code: 'KeyH', label: 'H' }, { code: 'KeyJ', label: 'J' }, { code: 'KeyK', label: 'K' }, { code: 'KeyL', label: 'L' }, { code: 'Semicolon', label: 'Ñ' }, { code: 'Quote', label: '{' }, { code: 'Backslash', label: '}' }],
+        [{ code: 'ShiftLeft', label: 'Shift', width: 'w-20' }, { code: 'KeyZ', label: 'Z' }, { code: 'KeyX', label: 'X' }, { code: 'KeyC', label: 'C' }, { code: 'KeyV', label: 'V' }, { code: 'KeyB', label: 'B' }, { code: 'KeyN', label: 'N' }, { code: 'KeyM', label: 'M' }, { code: 'Comma', label: ',' }, { code: 'Period', label: '.' }, { code: 'Slash', label: '-' }, { code: 'ShiftRight', label: 'Shift', width: 'flex-1' }],
+        [{ code: 'ControlLeft', label: 'Ctrl', width: 'w-12' }, { code: 'Fn', label: 'Fn', width: 'w-10' }, { code: 'MetaLeft', label: 'Win', width: 'w-10' }, { code: 'AltLeft', label: 'Alt', width: 'w-10' }, { code: 'Space', label: 'Espacio', width: 'flex-1' }, { code: 'AltRight', label: 'AltGr', width: 'w-10' }, { code: 'ControlRight', label: 'Ctrl', width: 'w-12' }]
+    ];
+
+    async function saveChanges() {
+        localStorage.setItem('ceibal_json_html_v2', JSON.stringify({ inventory, boxesList }));
+        refreshUI();
+        if (docRef) {
+            const statusBadge = document.getElementById('firebase-status');
+            try {
+                await setDoc(docRef, {
+                    inventory: inventory,
+                    boxesList: boxesList,
+                    updatedAt: new Date().toISOString(),
+                    uid_usuario: currentUser ? currentUser.uid : "anonimo",
+                    email: currentUser ? currentUser.email : "anonimo"
+                });
+                statusBadge.innerText = "Sincronizado Firebase ✓";
+                statusBadge.className = "text-[10px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800 font-mono";
+            } catch (err) {
+                statusBadge.innerText = "Guardado Local (Sin Firestore)";
+                statusBadge.className = "text-[10px] px-2 py-0.5 rounded-full bg-amber-950 text-amber-300 border border-amber-800 font-mono";
+            }
+        }
+    }
+
+    if (docRef) {
+        onSnapshot(docRef, (snapshot) => {
+            if (snapshot.exists()) {
+                const data = snapshot.data();
+                if (data.inventory && data.inventory.length > 0) {
+                    inventory = data.inventory;
+                    const detectedBoxes = new Set(data.boxesList || []);
+                    inventory.forEach(item => { if (item.box) detectedBoxes.add(item.box); });
+                    boxesList = Array.from(detectedBoxes);
+                    document.getElementById('firebase-status').innerText = "Sincronizado Firebase ✓";
+                    refreshUI();
+                }
+            }
+        }, () => {});
+    }
+
+    document.getElementById('btn-sync-firebase').onclick = async () => {
+        await saveChanges();
+        alert("Datos enviados a Firebase (startapp-9a-a5).");
+    };
+
+    function refreshUI() {
+        const assignSelect = document.getElementById('box-assignment-select');
+        assignSelect.innerHTML = '<option value="">-- Sin caja --</option>';
+        boxesList.forEach(b => assignSelect.innerHTML += `<option value="${b}">${b}</option>`);
+
+        updateMetrics();
+        renderFolders();
+        selectEquipment(selectedEquipmentId);
+    }
+
+    function updateMetrics() {
+        let ok = 0, loaned = 0, broken = 0, lost = 0;
+        inventory.forEach(i => {
+            if (i.isLost) lost++;
+            else if (i.loan) loaned++;
+            else if (i.missingKeys.length > 0) broken++;
+            else ok++;
+        });
+        document.getElementById('metric-total').innerText = inventory.length;
+        document.getElementById('metric-operativas').innerText = ok;
+        document.getElementById('metric-prestadas').innerText = loaned;
+        document.getElementById('metric-danadas').innerText = broken;
+        document.getElementById('metric-perdidas').innerText = lost;
+    }
+
+    function renderFolders() {
+        const container = document.getElementById('folders-container');
+        container.innerHTML = '';
+
+        const filtered = inventory.filter(item => {
+            const isBroken = item.missingKeys.length > 0;
+            const isLost = item.isLost;
+            const isLoaned = !!item.loan;
+            if (currentStatusFilter === 'operativa' && (isBroken || isLost || isLoaned)) return false;
+            if (currentStatusFilter === 'prestada' && !isLoaned) return false;
+            if (currentStatusFilter === 'danada' && (!isBroken || isLost)) return false;
+            if (currentStatusFilter === 'perdida' && !isLost) return false;
+
+            if (currentSearchTerm) {
+                const q = currentSearchTerm.toLowerCase();
+                const matchId = String(item.id).includes(q.replace('#', ''));
+                const matchSerial = item.serial.toLowerCase().includes(q);
+                const matchTeacher = item.loan && item.loan.teacher.toLowerCase().includes(q);
+                if (!matchId && !matchSerial && !matchTeacher) return false;
+            }
+            return true;
+        });
+
+        document.getElementById('inventory-count-badge').innerText = `${filtered.length}/${inventory.length}`;
+
+        const allFolders = [...boxesList, 'Sin Caja'];
+        allFolders.forEach(folderName => {
+            const itemsInFolder = filtered.filter(i => folderName === 'Sin Caja' ? !i.box : i.box === folderName);
+            if (itemsInFolder.length === 0 && folderName === 'Sin Caja') return;
+
+            const isOpen = openFolders.has(folderName);
+            const folderDiv = document.createElement('div');
+            folderDiv.className = "border border-slate-800 rounded-lg bg-slate-950/50 overflow-hidden";
+
+            const header = document.createElement('div');
+            header.className = "w-full px-3 py-2 flex items-center justify-between bg-slate-800/60 hover:bg-slate-800 text-left text-xs font-bold text-slate-200 cursor-pointer";
+            const allInFolderChecked = itemsInFolder.length > 0 && itemsInFolder.every(i => bulkSelectedIds.has(i.id));
+            header.innerHTML = `
+                <div class="flex items-center space-x-2">
+                    <input type="checkbox" class="folder-check rounded accent-blue-500 cursor-pointer" ${allInFolderChecked ? 'checked' : ''} title="Marcar/desmarcar toda esta carpeta">
+                    <span>${isOpen ? '📂' : '📁'} ${folderName}</span>
+                </div>
+                <span class="font-mono text-[11px] bg-slate-900 px-2 py-0.5 rounded text-blue-400">${itemsInFolder.length} eq.</span>
+            `;
+            header.onclick = (e) => {
+                if (e.target.classList.contains('folder-check')) {
+                    e.stopPropagation();
+                    if (e.target.checked) itemsInFolder.forEach(i => bulkSelectedIds.add(i.id));
+                    else itemsInFolder.forEach(i => bulkSelectedIds.delete(i.id));
+                    updateBulkBadge();
+                    renderFolders();
+                    return;
+                }
+                if (openFolders.has(folderName)) openFolders.delete(folderName);
+                else openFolders.add(folderName);
+                renderFolders();
+            };
+            folderDiv.appendChild(header);
+
+            if (isOpen) {
+                const list = document.createElement('div');
+                list.className = "p-2 space-y-1 max-h-72 overflow-y-auto";
+                itemsInFolder.forEach(item => {
+                    const row = document.createElement('div');
+                    const isSel = item.id === selectedEquipmentId;
+                    const isChecked = bulkSelectedIds.has(item.id);
+                    row.className = `p-2 rounded flex justify-between items-center cursor-pointer text-xs ${isSel ? 'bg-blue-900/50 border border-blue-500' : (isChecked ? 'bg-indigo-950/50 border border-indigo-500/40' : 'hover:bg-slate-800/70')}`;
+                    
+                    let badge = '<span class="text-emerald-400 font-bold">OK</span>';
+                    if (item.isLost) badge = '<span class="text-purple-400 font-bold">PERDIDA</span>';
+                    else if (item.loan) {
+                        const timeLabel = (item.loan.startTime && item.loan.endTime) ? `${item.loan.startTime}-${item.loan.endTime}` : (item.loan.duration || 'Prestada');
+                        badge = `<span class="text-amber-400 font-bold font-mono text-[11px]">${timeLabel}</span>`;
+                    }
+                    else if (item.missingKeys.length > 0) badge = `<span class="text-rose-400 font-bold">-${item.missingKeys.length}</span>`;
+
+                    row.innerHTML = `
+                        <div class="flex items-center space-x-2">
+                            <input type="checkbox" class="item-check rounded accent-indigo-500 cursor-pointer" ${isChecked ? 'checked' : ''}>
+                            <div>
+                                <span class="font-mono font-bold text-slate-300">${item.idPadded}</span>
+                                <span class="text-slate-400 ml-1">${item.model}</span>
+                                ${item.loan ? `<div class="text-[10px] text-amber-300/80">👤 ${item.loan.teacher}</div>` : ''}
+                            </div>
+                        </div>
+                        ${badge}
+                    `;
+                    row.onclick = (e) => {
+                        if (e.target.classList.contains('item-check')) {
+                            e.stopPropagation();
+                            if (e.target.checked) bulkSelectedIds.add(item.id);
+                            else bulkSelectedIds.delete(item.id);
+                            updateBulkBadge();
+                            renderFolders();
+                            return;
+                        }
+                        selectEquipment(item.id);
+                    };
+                    list.appendChild(row);
+                });
+                folderDiv.appendChild(list);
+            }
+            container.appendChild(folderDiv);
+        });
+    }
+
+    function renderLaptopLid(model) {
+        const lid = document.getElementById('laptop-lid-preview');
+        const svg = document.getElementById('lid-svg-container');
+        const p = document.getElementById('lid-text-primary');
+        const s = document.getElementById('lid-text-secondary');
+        document.getElementById('lid-model-code').innerText = model;
+
+        if (model === 'SARGAS') {
+            lid.className = "w-52 h-36 rounded-xl relative flex flex-col justify-between p-3 shadow-2xl overflow-hidden lid-sargas";
+            p.innerText = "ESCORPIO SARGAS"; p.className = "text-[10px] font-bold text-sky-400";
+            s.innerText = "θ Scorpii / Black";
+            svg.innerHTML = `<svg class="w-full h-full opacity-70 glow-blue" viewBox="0 0 200 140" fill="none"><path d="M 30,30 L 55,45 L 80,40 L 105,65 L 120,95 L 145,110 L 165,100 L 175,85" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="3 2" /><circle cx="80" cy="40" r="4" fill="#60a5fa" /><circle cx="175" cy="85" r="4" fill="#a855f7" /></svg>`;
+        } else if (model === 'SIRIO') {
+            lid.className = "w-52 h-36 rounded-xl relative flex flex-col justify-between p-3 shadow-2xl overflow-hidden lid-sirio";
+            p.innerText = "CAN MAYOR SIRIO"; p.className = "text-[10px] font-bold text-slate-800";
+            s.innerText = "α Canis Majoris / Silver";
+            svg.innerHTML = `<svg class="w-full h-full opacity-80 glow-orange" viewBox="0 0 200 140" fill="none"><path d="M 40,90 L 80,60 L 130,50 L 160,80 L 110,110 Z" stroke="#f97316" stroke-width="1.5" /><circle cx="80" cy="60" r="5" fill="#f97316" /></svg>`;
+        } else {
+            lid.className = "w-52 h-36 rounded-xl relative flex flex-col justify-between p-3 shadow-2xl overflow-hidden lid-wezen";
+            p.innerText = "CAN MAYOR WEZEN"; p.className = "text-[10px] font-bold text-slate-900";
+            s.innerText = "Delta de Can Mayor / White";
+            svg.innerHTML = `<svg class="w-full h-full opacity-85 glow-yellow" viewBox="0 0 200 140" fill="none"><path d="M 50,40 L 90,45 L 140,75 L 120,115 L 70,100 Z" stroke="#eab308" stroke-width="1.5" stroke-dasharray="4 2" /><circle cx="140" cy="75" r="5.5" fill="#eab308" /></svg>`;
+        }
+    }
+
+    function selectEquipment(id) {
+        selectedEquipmentId = id;
+        const item = inventory.find(e => e.id === id);
+        if (!item) return;
+
+        document.getElementById('detail-id').innerText = item.idPadded;
+        document.getElementById('detail-model-name').innerText = `Ceibalita ${item.model}`;
+        document.getElementById('detail-model-badge').innerText = item.model;
+        document.getElementById('detail-serial').innerText = `S/N: ${item.serial}`;
+        document.getElementById('box-assignment-select').value = item.box || '';
+
+        const statusText = document.getElementById('status-text');
+        const statusSub = document.getElementById('status-subtext');
+        const statusDot = document.getElementById('status-dot');
+
+        if (item.isLost) {
+            statusText.innerText = "PERDIDA";
+            statusSub.innerText = "Extraviada";
+            statusDot.className = "w-3 h-3 rounded-full bg-purple-500";
+        } else if (item.loan) {
+            const scheduleText = (item.loan.startTime && item.loan.endTime) ? `de ${item.loan.startTime} a ${item.loan.endTime}` : item.loan.duration;
+            statusText.innerText = "PRESTADA";
+            statusSub.innerText = `${item.loan.teacher} (${scheduleText})`;
+            statusDot.className = "w-3 h-3 rounded-full bg-amber-500";
+        } else if (item.missingKeys.length > 0) {
+            statusText.innerText = "CON FALLAS";
+            statusSub.innerText = `${item.missingKeys.length} teclas faltantes`;
+            statusDot.className = "w-3 h-3 rounded-full bg-rose-500";
+        } else {
+            statusText.innerText = "OPERATIVA";
+            statusSub.innerText = "Disponible";
+            statusDot.className = "w-3 h-3 rounded-full bg-emerald-500";
+        }
+
+        const mContainer = document.getElementById('missing-keys-container');
+        const mBadge = document.getElementById('missing-count-badge');
+        mBadge.innerText = `${item.missingKeys.length} Faltante(s)`;
+        if (item.missingKeys.length === 0) {
+            mBadge.className = "text-xs font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800";
+            mContainer.innerHTML = `<span class="text-xs text-slate-500 italic">Teclado completo sin fallas.</span>`;
+        } else {
+            mBadge.className = "text-xs font-mono text-rose-400 bg-rose-950/60 px-2 py-0.5 rounded border border-rose-800";
+            mContainer.innerHTML = item.missingKeys.map(k => `<span class="px-2 py-0.5 bg-rose-950 border border-rose-800 text-rose-300 rounded text-xs font-mono">${k}</span>`).join('');
+        }
+
+        const loanInfo = document.getElementById('loan-active-info');
+        const returnBtn = document.getElementById('btn-return-loan');
+        if (item.loan) {
+            loanInfo.classList.remove('hidden');
+            returnBtn.classList.remove('hidden');
+            const scheduleText = (item.loan.startTime && item.loan.endTime)
+                ? `De ${item.loan.startTime} a ${item.loan.endTime} (${item.loan.duration || ''})`
+                : item.loan.duration;
+            loanInfo.innerText = `Prestada a: ${item.loan.teacher} | Horario: ${scheduleText} | Fecha: ${item.loan.date}`;
+            document.getElementById('teacher-name-input').value = item.loan.teacher;
+            if (item.loan.startTime) document.getElementById('loan-start-input').value = item.loan.startTime;
+            if (item.loan.endTime) document.getElementById('loan-end-input').value = item.loan.endTime;
+        } else {
+            loanInfo.classList.add('hidden');
+            returnBtn.classList.add('hidden');
+        }
+
+        renderLaptopLid(item.model);
+        renderKeyboard(item);
+        renderFolders();
+    }
+
+    function renderKeyboard(item) {
+        const grid = document.getElementById('keyboard-grid');
+        grid.innerHTML = '';
+        KEYBOARD_LAYOUT.forEach(row => {
+            const rDiv = document.createElement('div');
+            rDiv.className = "flex gap-1 justify-center";
+            row.forEach(k => {
+                const isMissing = item.missingKeys.includes(k.code);
+                const btn = document.createElement('button');
+                btn.className = `key-cap ${k.width || 'w-11'} h-10 rounded text-xs font-mono font-bold relative flex items-center justify-center ${isMissing ? 'is-missing' : 'bg-slate-200 text-slate-900'}`;
+                btn.innerText = k.label;
+                btn.onclick = async () => {
+                    const idx = item.missingKeys.indexOf(k.code);
+                    if (idx > -1) item.missingKeys.splice(idx, 1);
+                    else item.missingKeys.push(k.code);
+                    await saveChanges();
+                };
+                rDiv.appendChild(btn);
+            });
+            grid.appendChild(rDiv);
+        });
+    }
+
+    function updateBulkBadge() {
+        const badge = document.getElementById('selected-bulk-badge');
+        const clearBtn = document.getElementById('btn-clear-selection');
+        if (bulkSelectedIds.size > 0) {
+            badge.classList.remove('hidden');
+            clearBtn.classList.remove('hidden');
+            badge.innerText = `${bulkSelectedIds.size} marcada(s)`;
+        } else {
+            badge.classList.add('hidden');
+            clearBtn.classList.add('hidden');
+        }
+    }
+
+    document.getElementById('btn-clear-selection').onclick = () => {
+        bulkSelectedIds.clear();
+        updateBulkBadge();
+        renderFolders();
+    };
+
+    function parseBulkIds(text) {
+        const ids = new Set();
+        if (!text) return ids;
+        text.split(',').forEach(part => {
+            const clean = part.trim().replace(/#/g, '');
+            if (!clean) return;
+            if (clean.includes('-')) {
+                const [a, b] = clean.split('-').map(n => parseInt(n.trim(), 10));
+                if (!isNaN(a) && !isNaN(b)) {
+                    const start = Math.min(a, b);
+                    const end = Math.max(a, b);
+                    for (let i = start; i <= end; i++) ids.add(i);
+                }
+            } else {
+                const num = parseInt(clean, 10);
+                if (!isNaN(num)) ids.add(num);
+            }
+        });
+        return ids;
+    }
+
+    document.getElementById('btn-assign-box').onclick = async () => {
+        const targetBox = document.getElementById('box-assignment-select').value || null;
+        if (bulkSelectedIds.size > 0) {
+            inventory.forEach(eq => {
+                if (bulkSelectedIds.has(eq.id)) eq.box = targetBox;
+            });
+            bulkSelectedIds.clear();
+            updateBulkBadge();
+        } else {
+            const item = inventory.find(e => e.id === selectedEquipmentId);
+            if (!item) return;
+            item.box = targetBox;
+        }
+        if (targetBox) openFolders.add(targetBox);
+        await saveChanges();
+    };
+
+    document.getElementById('btn-assign-bulk').onclick = async () => {
+        const targetBox = document.getElementById('box-assignment-select').value || null;
+        const rawText = document.getElementById('bulk-ids-input').value.trim();
+        const parsedIds = parseBulkIds(rawText);
+        const idsToMove = parsedIds.size > 0 ? parsedIds : bulkSelectedIds;
+
+        if (idsToMove.size === 0) {
+            return alert("Marcá las casillas de las compus en la lista o escribí un rango (ej: 1-25 o 1, 2, 5).");
+        }
+
+        let movedCount = 0;
+        inventory.forEach(eq => {
+            if (idsToMove.has(eq.id)) {
+                eq.box = targetBox;
+                movedCount++;
+            }
+        });
+
+        document.getElementById('bulk-ids-input').value = '';
+        bulkSelectedIds.clear();
+        updateBulkBadge();
+        if (targetBox) openFolders.add(targetBox);
+        await saveChanges();
+        alert(`Se movieron ${movedCount} equipo(s) a "${targetBox || 'Sin Caja'}".`);
+    };
+
+    document.getElementById('btn-create-box').onclick = async () => {
+        const name = document.getElementById('new-box-name').value.trim();
+        if (name && !boxesList.includes(name)) {
+            boxesList.push(name);
+            openFolders.add(name);
+            document.getElementById('new-box-name').value = '';
+            await saveChanges();
+        }
+    };
+
+    function calculateDurationLabel(start, end) {
+        const [sh, sm] = start.split(':').map(Number);
+        const [eh, em] = end.split(':').map(Number);
+        let diffMins = (eh * 60 + em) - (sh * 60 + sm);
+        if (diffMins <= 0) return `${start} a ${end}`;
+        const hrs = Math.floor(diffMins / 60);
+        const mins = diffMins % 60;
+        if (hrs > 0 && mins > 0) return `${hrs}h ${mins}m`;
+        if (hrs > 0) return `${hrs} h`;
+        return `${mins} min`;
+    }
+
+    document.getElementById('btn-save-loan').onclick = async () => {
+        const item = inventory.find(e => e.id === selectedEquipmentId);
+        const teacher = document.getElementById('teacher-name-input').value.trim();
+        const startTime = document.getElementById('loan-start-input').value;
+        const endTime = document.getElementById('loan-end-input').value;
+        const scope = document.getElementById('loan-scope-select').value;
+
+        if (!teacher) return alert("Escribe el nombre del profesor.");
+        if (!startTime || !endTime) return alert("Selecciona la hora de inicio y fin.");
+        if (endTime <= startTime) return alert("La hora de finalización ('Hasta') debe ser posterior a la hora de inicio ('Desde').");
+
+        const duration = calculateDurationLabel(startTime, endTime);
+        const today = new Date().toISOString().split('T')[0];
+        if (scope === 'box' && item.box) {
+            inventory.forEach(eq => {
+                if (eq.box === item.box && !eq.isLost) {
+                    eq.loan = { teacher, startTime, endTime, duration, date: today, boxLoan: item.box };
+                }
+            });
+        } else {
+            item.loan = { teacher, startTime, endTime, duration, date: today };
+        }
+        await saveChanges();
+    };
+
+    document.getElementById('btn-return-loan').onclick = async () => {
+        const item = inventory.find(e => e.id === selectedEquipmentId);
+        const scope = document.getElementById('loan-scope-select').value;
+        if (scope === 'box' && item.box) {
+            inventory.forEach(eq => { if (eq.box === item.box) eq.loan = null; });
+        } else {
+            item.loan = null;
+        }
+        await saveChanges();
+    };
+
+    document.getElementById('btn-fix-all').onclick = async () => {
+        const item = inventory.find(e => e.id === selectedEquipmentId);
+        if (item) { item.missingKeys = []; item.isLost = false; await saveChanges(); }
+    };
+
+    document.getElementById('btn-toggle-lost').onclick = async () => {
+        const item = inventory.find(e => e.id === selectedEquipmentId);
+        if (item) { item.isLost = !item.isLost; await saveChanges(); }
+    };
+
+    document.getElementById('search-input').oninput = (e) => {
+        currentSearchTerm = e.target.value;
+        renderFolders();
+    };
+
+    document.querySelectorAll('.filter-status-btn').forEach(btn => {
+        btn.onclick = (e) => {
+            document.querySelectorAll('.filter-status-btn').forEach(b => b.classList.remove('bg-blue-600', 'text-white'));
+            e.target.classList.add('bg-blue-600', 'text-white');
+            currentStatusFilter = e.target.dataset.filterStatus;
+            renderFolders();
+        };
+    });
+
+    document.getElementById('btn-export-json').onclick = () => {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(inventory, null, 2));
+        const a = document.createElement('a');
+        a.href = dataStr;
+        a.download = `Ceibalitas_Inventario_${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+    };
+
+    refreshUI();
+</script>
+</body>
+</html>
